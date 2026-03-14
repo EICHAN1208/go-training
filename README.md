@@ -292,3 +292,61 @@ Goの並行処理の入口です。
 
 つまり、**Goの基本文法 → Goらしい設計 → Goらしい標準ライブラリ → Goらしい並行処理** という順番です。この順でやると、知識が点ではなく線になります。
 
+# ディレクトリ構成
+```
+go-practice/
+├── go.mod
+├── README.md
+├── problems/
+│   ├── 01_sum/
+│   │   ├── README.md
+│   │   ├── main.go
+│   │   ├── sum.go
+│   │   └── sum_test.go
+│   ├── 02_max/
+│   │   ├── README.md
+│   │   ├── main.go
+│   │   ├── max.go
+│   │   └── max_test.go
+│   ├── 03_count_letters/
+│   │   ├── README.md
+│   │   ├── main.go
+│   │   ├── count_letters.go
+│   │   └── count_letters_test.go
+│   ├── 04_filter_even/
+│   │   ├── README.md
+│   │   ├── main.go
+│   │   ├── filter_even.go
+│   │   └── filter_even_test.go
+│   ├── 05_person_birthday/
+│   │   ├── README.md
+│   │   ├── main.go
+│   │   ├── person.go
+│   │   └── person_test.go
+│   ├── 06_person_string/
+│   │   ├── README.md
+│   │   ├── main.go
+│   │   ├── person.go
+│   │   └── person_test.go
+│   ├── 07_divide/
+│   │   ├── README.md
+│   │   ├── main.go
+│   │   ├── divide.go
+│   │   └── divide_test.go
+│   ├── 08_count_from_reader/
+│   │   ├── README.md
+│   │   ├── main.go
+│   │   ├── count_from_reader.go
+│   │   └── count_from_reader_test.go
+│   ├── 09_counter/
+│   │   ├── README.md
+│   │   ├── main.go
+│   │   ├── counter.go
+│   │   └── counter_test.go
+│   └── 10_goroutine_channel/
+│       ├── README.md
+│       ├── main.go
+│       └── main_test.go
+└── shared/
+    └── .gitkeep
+```
