@@ -6,13 +6,20 @@ import (
 )
 
 func TestCountLetters(t *testing.T) {
-	got := CountLetters("banana")
-	want := map[string]int{
-		"a": 3,
-		"b": 1,
-		"n": 2,
+	tests := []struct {
+		name  string
+		input string
+		want  map[string]int
+	}{
+		{"banana", "banana", map[string]int{"b": 1, "a": 3, "n": 2}},
+		{"empty", "", map[string]int{}},
+		{"single", "a", map[string]int{"a": 1}},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
+	for _, test := range tests {
+		got := CountLetters(test.input)
+		want := test.want
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("got %v, want %v", got, want)
+		}
 	}
 }
