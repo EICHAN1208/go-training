@@ -16,10 +16,12 @@ func TestCountLetters(t *testing.T) {
 		{"single", "a", map[string]int{"a": 1}},
 	}
 	for _, test := range tests {
-		got := CountLetters(test.input)
-		want := test.want
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("got %v, want %v", got, want)
-		}
+		t.Run(test.name, func(t *testing.T) {
+			got := CountLetters(test.input)
+			want := test.want
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("got %v want %v", got, want)
+			}
+		})
 	}
 }
