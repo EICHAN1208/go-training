@@ -285,12 +285,179 @@ Goの並行処理の入口です。
 `goroutine` は「軽い並行実行」、`channel` は「値の受け渡し」です。この組み合わせはGoの大きな特徴なので、最低1回は自分で書いて動かすと理解が進みます。
 
 
+## 11. interface を自分で定義する
+
+以下の `Shape` interface を定義し、`Circle` と `Rectangle` にそれぞれ `Area()` を実装してください。
+そして、`[]Shape` を受け取り、合計面積を返す関数を書いてください。
+
+```go
+type Shape interface {
+    Area() float64
+}
+
+type Circle struct {
+    Radius float64
+}
+
+type Rectangle struct {
+    Width, Height float64
+}
+
+func TotalArea(shapes []Shape) float64
+```
+
+### 例
+
+```go
+shapes := []Shape{
+    Circle{Radius: 3},
+    Rectangle{Width: 4, Height: 5},
+}
+fmt.Println(TotalArea(shapes))
+```
+
+出力例（円周率は `math.Pi` を使用）:
+
+```
+48.274333882308138
+```
+
+### 鍛えたいこと
+
+interface を「定義する側」から実践することです。
+6問目では `fmt.Stringer` という既存の interface を満たしましたが、今回は自分で interface を作ります。「異なる型を同じように扱う」というGoのポリモーフィズムの核心を体感できます。
+
+
+## 12. カスタムエラー型を作る
+
+ファイル操作を想定した関数を書いてください。
+エラーが発生したときに、ファイル名と理由を含むカスタムエラー型を返すようにします。
+
+```go
+type FileError struct {
+    FileName string
+    Reason   string
+}
+
+func (e *FileError) Error() string
+
+func ReadConfig(filename string) (string, error)
+```
+
+### 条件
+
+* `filename` が空文字のとき、`FileError{FileName: "", Reason: "filename is empty"}` を返す
+* `filename` が `"config.json"` のとき、`"debug=true"` という文字列を返す
+* それ以外のとき、`FileError{FileName: filename, Reason: "file not found"}` を返す
+
+### 例
+
+```go
+v, err := ReadConfig("config.json")
+fmt.Println(v, err)
+
+_, err = ReadConfig("missing.txt")
+var fe *FileError
+if errors.As(err, &fe) {
+    fmt.Println("ファイル名:", fe.FileName)
+    fmt.Println("理由:", fe.Reason)
+}
+```
+
+出力例:
+
+```
+debug=true <nil>
+ファイル名: missing.txt
+理由: file not found
+```
+
+### 鍛えたいこと
+
+`error` interface を自分で実装し、`errors.As` で型を取り出す感覚です。
+標準の `errors.New` では「何が起きたか」しか伝えられませんが、カスタムエラーにすると「どのファイルで」「なぜ」起きたかを構造化して持てます。実務では必須のパターンです。
+
+
+## 13. sync.WaitGroup で複数 goroutine を待つ
+
+整数スライスを受け取り、各要素を別々の goroutine で処理して、結果をスライスで返す関数を書いてください。
+各要素に対して「2倍にする」処理を並行で行います。
+
+```go
+func DoubleAll(nums []int) []int
+```
+
+### 条件
+
+* 各要素を別々の goroutine で処理する
+* `sync.WaitGroup` を使って全 goroutine の完了を待つ
+* 結果のスライスは元のスライスと同じ順序で返す（インデックスを保持する）
+
+### 例
+
+```go
+result := DoubleAll([]int{1, 2, 3, 4, 5})
+fmt.Println(result)
+```
+
+出力:
+
+```
+[2 4 6 8 10]
+```
+
+### 鍛えたいこと
+
+`sync.WaitGroup` による goroutine の同期です。
+「goroutine を起動したが、全部終わるまで待ちたい」という場面は非常によく出てきます。また、複数 goroutine から同じスライスに書き込む場合のインデックス管理も重要なポイントです。
+
+
+## 14. select でタイムアウトを実装する
+
+値を返すのに時間がかかる処理を goroutine で実行し、指定した時間内に完了しなければタイムアウトエラーを返す関数を書いてください。
+
+```go
+func FetchWithTimeout(delay time.Duration, timeout time.Duration) (string, error)
+```
+
+### 条件
+
+* goroutine 内で `time.Sleep(delay)` の後に `"result"` という文字列を channel に送る
+* `select` を使って、結果が来たときとタイムアウトしたときを分岐する
+* タイムアウトには `time.After` を使う
+* タイムアウト時は `errors.New("timeout")` を返す
+
+### 例
+
+```go
+v, err := FetchWithTimeout(50*time.Millisecond, 200*time.Millisecond)
+fmt.Println(v, err)
+
+v, err = FetchWithTimeout(300*time.Millisecond, 100*time.Millisecond)
+fmt.Println(v, err)
+```
+
+出力:
+
+```
+result <nil>
+ timeout
+```
+
+### 鍛えたいこと
+
+`select` 文と `time.After` によるタイムアウトパターンです。
+`select` は複数の channel 操作を同時に待ち、最初に準備できたものを実行します。このタイムアウトパターンは HTTP クライアントや外部 API 呼び出しなど、実務でほぼ必ず登場します。
+
+
 # 解く順番の意図
 
-この10問は、ただバラバラに並べたのではありません。
-最初の1から4で **slice、map、append、条件分岐** を固めて、5と6で **struct、メソッド、interface** に進みます。次に7と8で **error と I/O** に触れ、最後の9と10で **クロージャと並行処理** に入る流れです。
+この14問は、ただバラバラに並べたのではありません。
+最初の1から4で **slice、map、append、条件分岐** を固めて、5と6で **struct、メソッド、interface** に進みます。次に7と8で **error と I/O** に触れ、9と10で **クロージャと並行処理** に入る流れです。
 
-つまり、**Goの基本文法 → Goらしい設計 → Goらしい標準ライブラリ → Goらしい並行処理** という順番です。この順でやると、知識が点ではなく線になります。
+11以降はその応用です。11で **interface を自分で設計する**、12で **カスタムエラー型と errors.As**、13で **WaitGroup による goroutine の同期**、14で **select によるタイムアウト** を学びます。
+
+つまり、**Goの基本文法 → Goらしい設計 → Goらしい標準ライブラリ → Goらしい並行処理 → 実務で使うパターン** という順番です。この順でやると、知識が点ではなく線になります。
 
 # ディレクトリ構成
 ```
@@ -343,10 +510,30 @@ go-practice/
 │   │   ├── main.go
 │   │   ├── counter.go
 │   │   └── counter_test.go
-│   └── 10_goroutine_channel/
+│   ├── 10_goroutine_channel/
+│   │   ├── README.md
+│   │   ├── main.go
+│   │   └── main_test.go
+│   ├── 11_shape_interface/
+│   │   ├── README.md
+│   │   ├── main.go
+│   │   ├── shape.go
+│   │   └── shape_test.go
+│   ├── 12_custom_error/
+│   │   ├── README.md
+│   │   ├── main.go
+│   │   ├── config.go
+│   │   └── config_test.go
+│   ├── 13_wait_group/
+│   │   ├── README.md
+│   │   ├── main.go
+│   │   ├── double.go
+│   │   └── double_test.go
+│   └── 14_select_timeout/
 │       ├── README.md
 │       ├── main.go
-│       └── main_test.go
+│       ├── fetch.go
+│       └── fetch_test.go
 └── shared/
     └── .gitkeep
 ```
