@@ -32,8 +32,16 @@ func (e *ValidationError) Error() string {
 //   - id == "alice"   のとき: "Alice" と nil を返す
 //   - それ以外        のとき: "" と nil を返す（このテストでは未使用）
 func FetchUser(id string) (string, error) {
-	// TODO: 実装する
-	return "", nil
+	switch id {
+	case "":
+		return "", &ValidationError{Field: "id", Message: "id is empty"}
+	case "missing":
+		return "", &NotFoundError{Resource: "user", ID: "missing"}
+	case "alice":
+		return "Alice", nil
+	default:
+		return "", nil
+	}
 }
 
 // GetUserName は service 層を想定した関数。内部で FetchUser を呼ぶ。
@@ -47,6 +55,9 @@ func FetchUser(id string) (string, error) {
 // テストでは「ラップ後のエラーから errors.As で *NotFoundError / *ValidationError を取り出せる」ことを検証する。
 // %v でラップしてしまうと型情報が落ちて errors.As が false になり、テストが落ちる。
 func GetUserName(id string) (string, error) {
-	// TODO: 実装する
-	return "", nil
+	name, err := FetchUser(id)
+	if err != nil {
+		return "", fmt.Errorf("GetUserName: %w", err)
+	}
+	return name, nil
 }
