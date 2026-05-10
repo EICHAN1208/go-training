@@ -450,12 +450,129 @@ result <nil>
 `select` は複数の channel 操作を同時に待ち、最初に準備できたものを実行します。このタイムアウトパターンは HTTP クライアントや外部 API 呼び出しなど、実務でほぼ必ず登場します。
 
 
+## 15. `%w` でラップしたエラーから `errors.As` で型を取り出す
+
+repository 層と service 層の 2 階層を想定し、内側で発生したカスタムエラーを **`%w` でラップして外に返す** 関数を書いてください。呼び出し側はラップされたエラーから `errors.As` で元の型を取り出せる必要があります。
+
+```go
+type NotFoundError struct {
+    Resource string
+    ID       string
+}
+
+func (e *NotFoundError) Error() string
+
+type ValidationError struct {
+    Field   string
+    Message string
+}
+
+func (e *ValidationError) Error() string
+
+// repository 層
+func FetchUser(id string) (string, error)
+
+// service 層 (内部で FetchUser を呼ぶ)
+func GetUserName(id string) (string, error)
+```
+
+### 仕様
+
+`FetchUser`:
+
+* `id == ""`        → `&ValidationError{Field: "id", Message: "id is empty"}` を返す
+* `id == "missing"` → `&NotFoundError{Resource: "user", ID: "missing"}` を返す
+* `id == "alice"`   → `"Alice"` と `nil` を返す
+
+`GetUserName`:
+
+* `FetchUser` がエラーを返したら、`fmt.Errorf("GetUserName: %w", err)` でラップして返す
+* 正常系では `FetchUser` の結果をそのまま返す
+
+### 例
+
+```go
+_, err := GetUserName("missing")
+fmt.Println(err)
+// GetUserName: user not found: id=missing
+
+var nfe *NotFoundError
+if errors.As(err, &nfe) {
+    fmt.Println(nfe.Resource, nfe.ID)
+}
+// user missing
+```
+
+### 鍛えたいこと
+
+`%w` と `errors.As` の組み合わせです。
+**`%v` でラップしてしまうと型情報が落ちて `errors.As` が `false` を返す** という落とし穴を、テストで体感できます。
+service 層で文脈を足すための「ラップ」と、呼び出し側での「取り出し」を両立させるのが Go 1.13 以降の標準イディオムです。
+
+
+## 16. `errors.Is` と `errors.As` の使い分け
+
+センチネルエラーと構造体エラーが混在する関数を書き、呼び出し側でエラーの種類を判定して分岐するロジックを実装してください。
+
+```go
+var ErrUnauthorized = errors.New("unauthorized")
+
+type QuotaExceededError struct {
+    Limit int
+    Used  int
+}
+
+func (e *QuotaExceededError) Error() string
+
+func CallAPI(token string, quota int) (string, error)
+func ClassifyError(err error) string
+```
+
+### 仕様
+
+`CallAPI`:
+
+* `token == ""`  → `ErrUnauthorized` を `fmt.Errorf("CallAPI: %w", err)` でラップして返す
+* `quota >= 100` → `&QuotaExceededError{Limit: 100, Used: quota}` を `%w` でラップして返す
+* それ以外       → `"ok"`, `nil`
+
+`ClassifyError`:
+
+* `nil`                         → `"ok"`
+* `errors.Is(err, ErrUnauthorized)` が `true` → `"unauthorized"`
+* `errors.As(err, &QuotaExceededError)` が `true` → `"quota_exceeded:Used/Limit"`（例: `"quota_exceeded:120/100"`）
+* それ以外                       → `"unknown"`
+
+### 例
+
+```go
+_, err := CallAPI("", 0)
+fmt.Println(ClassifyError(err))
+// unauthorized
+
+_, err = CallAPI("token", 120)
+fmt.Println(ClassifyError(err))
+// quota_exceeded:120/100
+```
+
+### 鍛えたいこと
+
+**センチネルエラー (`errors.Is`)** と **構造体エラー (`errors.As`)** の使い分けです。
+
+* 値そのものに意味がある（"見つからない" のような状態フラグ的なもの）→ センチネルを `errors.Is`
+* フィールドに情報を持つ（"上限と使用量" のような構造化データ）→ 構造体を `errors.As` で取り出す
+
+実務では `errors.Is` と `errors.As` を組み合わせて呼び出し側で分岐するのが定番。型アサーション (`err.(*T)`) はラップされた瞬間に効かなくなるので、`errors.As` を使うのが正解です。
+
+
 # 解く順番の意図
 
 この14問は、ただバラバラに並べたのではありません。
 最初の1から4で **slice、map、append、条件分岐** を固めて、5と6で **struct、メソッド、interface** に進みます。次に7と8で **error と I/O** に触れ、9と10で **クロージャと並行処理** に入る流れです。
 
 11以降はその応用です。11で **interface を自分で設計する**、12で **カスタムエラー型と errors.As**、13で **WaitGroup による goroutine の同期**、14で **select によるタイムアウト** を学びます。
+
+15・16 では **エラー設計の上級編** として `%w` でのラップ、`errors.As` での取り出し、`errors.Is` との使い分けを練習します。実務での層をまたいだエラーハンドリング（repository → service → handler）はこのパターンが基礎になります。
 
 つまり、**Goの基本文法 → Goらしい設計 → Goらしい標準ライブラリ → Goらしい並行処理 → 実務で使うパターン** という順番です。この順でやると、知識が点ではなく線になります。
 
@@ -529,11 +646,17 @@ go-practice/
 │   │   ├── main.go
 │   │   ├── double.go
 │   │   └── double_test.go
-│   └── 14_select_timeout/
-│       ├── README.md
-│       ├── main.go
-│       ├── fetch.go
-│       └── fetch_test.go
+│   ├── 14_select_timeout/
+│   │   ├── README.md
+│   │   ├── main.go
+│   │   ├── fetch.go
+│   │   └── fetch_test.go
+│   ├── 15_wrap_error/
+│   │   ├── userrepo.go
+│   │   └── userrepo_test.go
+│   └── 16_errors_is_as/
+│       ├── authstore.go
+│       └── authstore_test.go
 └── shared/
     └── .gitkeep
 ```
